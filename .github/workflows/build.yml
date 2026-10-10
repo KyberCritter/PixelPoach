@@ -1,0 +1,51 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Run host tests
+        run: make -C tests/host run
+
+      - name: Build ROM with devkitARM
+        run: |
+          docker run --rm \
+            -v "$PWD:/work" -w /work \
+            devkitpro/devkitarm:latest make
+
+      - name: Upload ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: PixelPoach
+          path: PixelPoach.gba
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download ROM
+        uses: actions/download-artifact@v4
+        with:
+          name: PixelPoach
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v3.0.3
+        with:
+          files: PixelPoach.gba
+          generate_release_notes: true
