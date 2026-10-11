@@ -50,6 +50,10 @@ cmake_install.cmake
 install_manifest.txt
 compile_commands.json
 
+# Host test binaries
+tests/host/test_save
+tests/host/test_trade
+
 # Temporary files
 *.tmp
 *.log
