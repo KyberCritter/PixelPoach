@@ -16,15 +16,17 @@ static void view_draw(void)
     const u8 *slot = cam_store_buf() + CAM_SLOT_BASE + (u32)v_cur * CAM_SLOT_SIZE;
     cam_image_decode(slot, shade);
 
-    vu8 *dst = (vu8 *)MEM_VRAM;      // MODE4 page 0
+    // MODE4 page 0. VRAM ignores 8-bit writes on real hardware (the byte is
+    // mirrored into both halves of the halfword), so write whole halfwords:
+    // two consecutive pixels make up one 16-bit word.
+    vu16 *dst = (vu16 *)MEM_VRAM;
     int ox = (240 - CAM_IMG_W) / 2;
     int oy = (160 - CAM_IMG_H) / 2;
     for (int y = 0; y < CAM_IMG_H; y++) {
-        for (int x = 0; x < CAM_IMG_W; x++) {
-            int sx = ox + x, sy = oy + y;
-            if (sx >= 0 && sx < 240 && sy >= 0 && sy < 160)
-                dst[sy * 240 + sx] = shade[y * CAM_IMG_W + x];
-        }
+        vu16 *row = dst + ((oy + y) * 240 + ox) / 2;
+        const u8 *src = &shade[y * CAM_IMG_W];
+        for (int x = 0; x < CAM_IMG_W; x += 2)
+            row[x >> 1] = (u16)(src[x] | (src[x + 1] << 8));
     }
 }
 
@@ -36,6 +38,14 @@ void view_enter(void)
     pal_bg_mem[1] = RGB15(21, 21, 21);
     pal_bg_mem[2] = RGB15(11, 11, 11);
     pal_bg_mem[3] = RGB15(2, 2, 2);
+    pal_bg_mem[4] = RGB15(2, 2, 3);   // border colour, distinct from the 4 shades
+
+    // Clear the whole bitmap page. The tiled UI's font/tilemap data still sits
+    // in VRAM when we switch to MODE4; without this the area around the photo
+    // shows that stale data as garbage. Halfword writes only (VRAM quirk).
+    vu16 *vram = (vu16 *)MEM_VRAM;
+    for (int i = 0; i < 240 * 160 / 2; i++)
+        vram[i] = 0x0404;             // index 4 in both pixels
 
     // most recently stored photo (last occupied slot), else 0
     int cap = cam_store_capacity();
