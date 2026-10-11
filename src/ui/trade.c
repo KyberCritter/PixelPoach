@@ -100,18 +100,26 @@ void receive_frame(int frame)
         tx_buf[0] = TRADE_HANDSHAKE_B;
         tx_buf[1] = reply_mode();
 
-        int rx_len = 0;
-        int rc = cam_link_exchange(false, tx_buf, sizeof tx_buf,
-                                   rx_buf, TRADE_STREAM_BYTES, &rx_len, dbg_live);
-        dbg_record(rc, rx_buf, rx_len, tx_buf, rx_len);
-
-        rv_rc = rc;
-        rv_rxlen = rx_len;
-        rv_result = -1;
-        if (rc != CAM_XCHG_CANCELLED &&
-            trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
-            rv_result = cam_store_add(img, thumb, meta);
+        // Stay armed until a whole photo arrives or the user holds B. A gap in
+        // the link stream (the camera has not started yet, or pauses between
+        // bytes) must not drop us to the result screen while it is still
+        // working; re-enter the exchange instead.
+        for (;;) {
+            int rx_len = 0;
+            int rc = cam_link_exchange(false, tx_buf, sizeof tx_buf,
+                                       rx_buf, TRADE_STREAM_BYTES, &rx_len, dbg_live);
+            rv_rc = rc;
+            rv_rxlen = rx_len;
+            rv_result = -1;
+            if (rc == CAM_XCHG_CANCELLED)
+                break;
+            if (trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
+                rv_result = cam_store_add(img, thumb, meta);
+                break;
+            }
         }
+        dbg_record(rv_rc, rx_buf, rv_rxlen, tx_buf, rv_rxlen);
+
         rv_state = RECV_DONE;
         recv_draw();
     } else if (rv_state == RECV_DONE) {
