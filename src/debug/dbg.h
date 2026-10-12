@@ -41,8 +41,4 @@ void dbg_load(void);
 void dbg_enter(void);
 void dbg_frame(int frame);
 
-// Live progress callback for cam_link_exchange: writes the current byte count
-// to the screen without needing VBlank (the link driver runs with IRQs masked).
-void dbg_live(int n);
-
 #endif

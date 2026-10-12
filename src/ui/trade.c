@@ -19,6 +19,28 @@ static EWRAM_BSS u8 img[CAM_IMG_BYTES];
 static EWRAM_BSS u8 thumb[CAM_THUMB_BYTES];
 static EWRAM_BSS u8 meta[CAM_META_BYTES];
 
+// Write `v` right-aligned in `width` decimal digits at (x, y), zero padded.
+static void count_put(int x, int y, int v, int width)
+{
+    static const char dig[] = "0123456789";
+    u16 *tm = text_map();
+    if (v < 0) v = 0;
+    for (int i = width - 1; i >= 0; i--) {
+        map_put(tm, x + i, y, dig[v % 10], PB_UI);
+        v /= 10;
+    }
+}
+
+// Live transfer progress, called from the link driver with IRQs masked: a
+// fixed-width "NNNN/4104 bytes" counter so the digits never leave residue.
+static void xfer_count(int n)
+{
+    count_put(7, 13, n, 4);
+    map_put(text_map(), 11, 13, '/', PB_UI);
+    count_put(12, 13, TRADE_PHOTO_BYTES, 4);
+    ui_text(17, 13, " bytes", PB_UI);
+}
+
 // B reports its album count in Mode 1, never "full" (0x5E would make A abort).
 static u8 reply_mode(void)
 {
@@ -28,12 +50,10 @@ static u8 reply_mode(void)
 
 // ---------- receive (GBA is Camera B, camera A sends) ----------
 
-enum { RECV_READY, RECV_WAIT, RECV_DONE };
+enum { RECV_READY, RECV_WAIT, RECV_PHOTO, RECV_FAIL };
 
 static int rv_state;
 static int rv_result;   // -1 = fail, >= 0 = slot saved
-static int rv_rc;       // CAM_XCHG_* code from the last exchange
-static int rv_rxlen;
 
 static void recv_draw(void)
 {
@@ -58,23 +78,15 @@ static void recv_draw(void)
         ui_text(6, 9,  "Waiting for the", PB_UI);
         ui_text(6, 10, "camera to send.", PB_UI);
         ui_text(6, 12, "Hold B to cancel", PB_UI);
-        ui_text(6, 15, "bytes rx:", PB_UI);
+        xfer_count(0);
         break;
-    case RECV_DONE: {
-        ui_text(10, 5, "RESULT", PB_UI);
-        char line[32];
-        if (rv_result >= 0) {
-            siprintf(line, "Saved photo %d.", rv_result + 1);
-            ui_text(6, 8, line, PB_UI);
-        } else {
-            ui_text(6, 8, "No photo saved.", PB_UI);
-        }
-        siprintf(line, "rc=%d  rx=%d", rv_rc, rv_rxlen);
-        ui_text(6, 10, line, PB_UI);
-        ui_text(6, 12, "Start: hex dump", PB_UI);
-        ui_text(6, 15, "B: Back", PB_UI);
+    case RECV_FAIL:
+        ui_text(10, 5, "RECEIVE", PB_UI);
+        ui_text(6, 9, "No photo received.", PB_UI);
+        ui_text(6, 16, "B: Back", PB_UI);
         break;
-    }
+    default:
+        break;
     }
 }
 
@@ -104,13 +116,13 @@ void receive_frame(int frame)
         // the link stream (the camera has not started yet, or pauses between
         // bytes) must not drop us to the result screen while it is still
         // working; re-enter the exchange instead.
+        int rc = CAM_XCHG_TIMEOUT;
+        int rx_len = 0;
+        rv_result = -1;
         for (;;) {
-            int rx_len = 0;
-            int rc = cam_link_exchange(false, tx_buf, sizeof tx_buf,
-                                       rx_buf, TRADE_STREAM_BYTES, &rx_len, dbg_live);
-            rv_rc = rc;
-            rv_rxlen = rx_len;
-            rv_result = -1;
+            rx_len = 0;
+            rc = cam_link_exchange(false, tx_buf, sizeof tx_buf,
+                                   rx_buf, TRADE_STREAM_BYTES, &rx_len, xfer_count);
             if (rc == CAM_XCHG_CANCELLED)
                 break;
             if (trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
@@ -118,13 +130,20 @@ void receive_frame(int frame)
                 break;
             }
         }
-        dbg_record(rv_rc, rx_buf, rv_rxlen, tx_buf, rv_rxlen);
+        dbg_record(rc, rx_buf, rx_len, tx_buf, rx_len);
 
-        rv_state = RECV_DONE;
-        recv_draw();
-    } else if (rv_state == RECV_DONE) {
-        if (key_hit(KEY_START)) app_goto(ST_DEBUG);
-        if (key_hit(KEY_B))     app_goto(ST_MENU);
+        if (rv_result >= 0) {
+            // Show the complete photo immediately; B returns to the menu.
+            view_render_photo(img);
+            rv_state = RECV_PHOTO;
+        } else {
+            rv_state = RECV_FAIL;
+            recv_draw();
+        }
+    } else if (rv_state == RECV_PHOTO) {
+        if (key_hit(KEY_A | KEY_B)) { pxl_init_video(); app_goto(ST_MENU); }
+    } else if (rv_state == RECV_FAIL) {
+        if (key_hit(KEY_A | KEY_B)) app_goto(ST_MENU);
     }
 }
 
@@ -135,8 +154,6 @@ enum { SEND_SELECT, SEND_BUSY, SEND_DONE };
 static int sd_state;
 static int sd_cur;        // slot index
 static bool sd_ok;
-static int sd_rc;
-static int sd_rxlen;
 
 static int next_occupied(int from, int dir)
 {
@@ -178,18 +195,12 @@ static void send_draw(void)
         ui_text(6, 9,  "Camera must be in", PB_UI);
         ui_text(6, 10, "RECEIVE mode.", PB_UI);
         ui_text(6, 12, "Hold B to cancel", PB_UI);
-        ui_text(6, 15, "bytes rx:", PB_UI);
+        xfer_count(0);
         break;
     case SEND_DONE:
-        ui_text(10, 5, "RESULT", PB_UI);
+        ui_text(10, 5, "SEND BACK", PB_UI);
         ui_text(6, 8, sd_ok ? "Photo sent." : "Send failed.", PB_UI);
-        {
-            char line[32];
-            siprintf(line, "rc=%d  rx=%d", sd_rc, sd_rxlen);
-            ui_text(6, 10, line, PB_UI);
-        }
-        ui_text(6, 12, "Start: hex dump", PB_UI);
-        ui_text(6, 15, "B: Back", PB_UI);
+        ui_text(6, 16, "B: Back", PB_UI);
         break;
     }
 }
@@ -222,16 +233,13 @@ void send_frame(int frame)
 
         int rx_len = 0;
         int rc = cam_link_exchange(true, tx_buf, tx_len,
-                                   rx_buf, TRADE_STREAM_BYTES, &rx_len, dbg_live);
+                                   rx_buf, TRADE_STREAM_BYTES, &rx_len, xfer_count);
         dbg_record(rc, rx_buf, rx_len, tx_buf, tx_len);
 
-        sd_rc = rc;
-        sd_rxlen = rx_len;
         sd_ok = (rx_len >= 1) && (rx_buf[0] == TRADE_HANDSHAKE_B);
         sd_state = SEND_DONE;
         send_draw();
     } else if (sd_state == SEND_DONE) {
-        if (key_hit(KEY_START)) app_goto(ST_DEBUG);
-        if (key_hit(KEY_B))     app_goto(ST_MENU);
+        if (key_hit(KEY_A | KEY_B)) app_goto(ST_MENU);
     }
 }

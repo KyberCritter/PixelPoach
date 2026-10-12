@@ -10,15 +10,11 @@
 static int v_cur;                     // slot index
 static EWRAM_BSS u8 shade[CAM_IMG_W * CAM_IMG_H];
 
-static void view_draw(void)
+// Blit the decoded image into MODE4 page 0. VRAM ignores 8-bit writes on real
+// hardware (the byte is mirrored into both halves of the halfword), so write
+// whole halfwords: two consecutive pixels make up one 16-bit word.
+static void view_blit(void)
 {
-    // decode the slot's image tiles directly from the in-memory save
-    const u8 *slot = cam_store_buf() + CAM_SLOT_BASE + (u32)v_cur * CAM_SLOT_SIZE;
-    cam_image_decode(slot, shade);
-
-    // MODE4 page 0. VRAM ignores 8-bit writes on real hardware (the byte is
-    // mirrored into both halves of the halfword), so write whole halfwords:
-    // two consecutive pixels make up one 16-bit word.
     vu16 *dst = (vu16 *)MEM_VRAM;
     int ox = (240 - CAM_IMG_W) / 2;
     int oy = (160 - CAM_IMG_H) / 2;
@@ -30,9 +26,18 @@ static void view_draw(void)
     }
 }
 
-void view_enter(void)
+static void view_draw(void)
 {
-    // switch to MODE4 bitmap
+    // decode the slot's image tiles directly from the in-memory save
+    const u8 *slot = cam_store_buf() + CAM_SLOT_BASE + (u32)v_cur * CAM_SLOT_SIZE;
+    cam_image_decode(slot, shade);
+    view_blit();
+}
+
+// Set up the MODE4 bitmap layer and paint one image buffer. Used by the viewer
+// and by the receive scene, which shows the photo as soon as it arrives.
+static void view_setup_mode4(void)
+{
     REG_DISPCNT = DCNT_MODE4 | DCNT_BG2;
     pal_bg_mem[0] = RGB15(31, 31, 31);
     pal_bg_mem[1] = RGB15(21, 21, 21);
@@ -46,6 +51,19 @@ void view_enter(void)
     vu16 *vram = (vu16 *)MEM_VRAM;
     for (int i = 0; i < 240 * 160 / 2; i++)
         vram[i] = 0x0404;             // index 4 in both pixels
+}
+
+// Paint a raw 2bpp camera image (CAM_IMG_BYTES) centred on a MODE4 screen.
+void view_render_photo(const uint8_t *img)
+{
+    view_setup_mode4();
+    cam_image_decode(img, shade);
+    view_blit();
+}
+
+void view_enter(void)
+{
+    view_setup_mode4();
 
     // most recently stored photo (last occupied slot), else 0
     int cap = cam_store_capacity();

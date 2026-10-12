@@ -45,26 +45,6 @@ void dbg_load(void)
     }
 }
 
-// ---- live progress (called from the link driver with IRQs masked) ----
-
-static inline void put_hex4(int x, int y, int v)
-{
-    static const char hex[] = "0123456789ABCDEF";
-    u16 *tm = text_map();
-    for (int i = 3; i >= 0; i--) {
-        map_put(tm, x + i, y, hex[(v >> (4 * i)) & 0xF], PB_UI);
-    }
-}
-
-void dbg_live(int n)
-{
-    u16 *tm = text_map();
-    map_put(tm, 1, 18, 'R', PB_UI);
-    map_put(tm, 2, 18, 'X', PB_UI);
-    map_put(tm, 3, 18, ' ', PB_UI);
-    put_hex4(4, 18, n);
-}
-
 // ---- hex viewer scene ----
 
 static int hv_show_tx;      // 0 = rx, 1 = tx

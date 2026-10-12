@@ -2,6 +2,8 @@
 #ifndef APP_H
 #define APP_H
 
+#include <stdint.h>
+
 typedef enum {
     ST_TITLE,
     ST_MENU,
@@ -22,6 +24,9 @@ void menu_enter(void);      void menu_frame(int frame);
 void receive_enter(void);   void receive_frame(int frame);
 void send_enter(void);      void send_frame(int frame);
 void view_enter(void);      void view_frame(int frame);
+// Paint a raw camera image (CAM_IMG_BYTES) full-screen in MODE4. Used by the
+// receive scene to show the photo as soon as it has been captured.
+void view_render_photo(const uint8_t *img);
 void about_enter(void);     void about_frame(int frame);
 void dbg_enter(void);       void dbg_frame(int frame);
 
