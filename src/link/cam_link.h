@@ -51,8 +51,11 @@ bool cam_link_slave_byte(u8 send, u8 *recv);
 // the bytes the GBA shifts out; bytes past tx_len are sent as 0x00. Received
 // bytes land in `rx`. Returns a CAM_XCHG_* code; *rx_len is set to the number
 // of bytes exchanged. IRQs are masked for the duration (link timing).
-// `progress`, if non-NULL, is called after every byte with the byte index (used
-// to show a live counter on screen while IRQs are off).
+// `progress`, if non-NULL, is called with the byte index while the GBA is clock
+// master (inside the settle window, where the camera is already waiting), plus
+// once when the exchange ends. It must never run between a byte and the next
+// slave read, or the camera's next clock edge can be missed and the tail of the
+// transfer dropped.
 int cam_link_exchange(bool is_a, const u8 *tx, int tx_len,
                       u8 *rx, int max_rounds, int *rx_len,
                       void (*progress)(int n));

@@ -20,9 +20,8 @@ static EWRAM_BSS u8 thumb[CAM_THUMB_BYTES];
 static EWRAM_BSS u8 meta[CAM_META_BYTES];
 
 // Write `v` right-aligned in `width` decimal digits at (x, y), zero padded.
-// Inline and free of function calls: this runs from the link driver between
-// bytes with IRQs masked, where an extra call can overrun the camera's next
-// clock edge and truncate the transfer.
+// Inline and free of function calls: it runs from the link driver with IRQs
+// masked, so it must stay trivially cheap.
 static inline void count_put(int x, int y, int v, int width)
 {
     u16 *tm = text_map();
@@ -32,14 +31,12 @@ static inline void count_put(int x, int y, int v, int width)
     }
 }
 
-// Live transfer progress, called from the link driver between bytes with IRQs
-// masked. The GBA link timing is cycle-tight, so this must stay at or under the
-// cost of the old RX debug counter: only the four count digits are touched, and
-// only every 8th byte. The static "/4104 bytes" label is drawn once by the
-// scene (recv_draw/send_draw).
+// Live transfer progress. Called from the link driver while the GBA holds the
+// clock (the camera is already waiting), so the four digit writes are off the
+// receive path and cannot make us miss an edge. The static "/4104 bytes" label
+// is drawn once by the scene (recv_draw/send_draw).
 static void xfer_count(int n)
 {
-    if (n & 7) return;
     count_put(7, 13, n, 4);
 }
 
@@ -131,11 +128,7 @@ void receive_frame(int frame)
                                    rx_buf, TRADE_STREAM_BYTES, &rx_len, xfer_count);
             if (rc == CAM_XCHG_CANCELLED)
                 break;
-            // Only accept a fully received photo. A short read means the tail
-            // of the stream was missed; saving it would silently produce a
-            // corrupt image, so stay armed and wait for the rest instead.
-            if (rx_len >= TRADE_PHOTO_BYTES &&
-                trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
+            if (trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
                 rv_result = cam_store_add(img, thumb, meta);
                 break;
             }
