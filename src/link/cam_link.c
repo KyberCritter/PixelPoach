@@ -144,12 +144,6 @@ int cam_link_exchange(bool is_a, const u8 *tx, int tx_len,
         u8 recv;
         if (my_clock) {
             delay_ticks(CAM_SETTLE_TICKS);      // let the camera become slave
-            // Report progress NOW, in the settle window, not right after a byte.
-            // At this point the camera is the slave and is waiting for our
-            // clock, so drawing the counter cannot make us miss a clock edge.
-            // Running it after every byte put it directly in front of the next
-            // slave read, and its cost made us drop the tail of the stream.
-            if (progress) progress(n);
             recv = master_byte_raw(send);
         } else {
             // First byte: wait indefinitely for the camera to start clocking
@@ -158,22 +152,21 @@ int cam_link_exchange(bool is_a, const u8 *tx, int tx_len,
             int rc = slave_byte_raw(send, &recv, budget);
             if (rc == 2) {                       // cancelled
                 REG_IME = ime;
-                if (progress) progress(n);
                 if (rx_len) *rx_len = n;
                 return CAM_XCHG_CANCELLED;
             }
             if (rc == 1) {                       // no clock: absent or finished
                 REG_IME = ime;
-                if (progress) progress(n);
                 if (rx_len) *rx_len = n;
                 return (n == 0) ? CAM_XCHG_TIMEOUT : CAM_XCHG_OK;
             }
         }
         rx[n++] = recv;
+        if (progress)
+            progress(n);
     }
 
     REG_IME = ime;
-    if (progress) progress(n);
     if (rx_len) *rx_len = n;
     return CAM_XCHG_OK;
 }

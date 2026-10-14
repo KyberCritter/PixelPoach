@@ -33,8 +33,9 @@
 #define TRADE_STREAM_BYTES 4160         // generous capture/playback buffer
 
 // Total bytes the camera clocks for one photo, from the handshake through the
-// trailing payload. Verified against a real transfer (4104 bytes), so the UI
-// can show an "n/4104 bytes" progress counter.
+// trailing payload. Measured from a real transfer (4104 bytes); used only as
+// the denominator of the on-screen "n/4104 bytes" progress counter, never as
+// an acceptance gate.
 #define TRADE_PHOTO_BYTES  4104
 
 // Parse a captured A->B SEND stream into its photo payloads. The image,

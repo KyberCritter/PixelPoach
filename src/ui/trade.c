@@ -19,22 +19,24 @@ static EWRAM_BSS u8 img[CAM_IMG_BYTES];
 static EWRAM_BSS u8 thumb[CAM_THUMB_BYTES];
 static EWRAM_BSS u8 meta[CAM_META_BYTES];
 
-// Write `v` right-aligned in `width` decimal digits at (x, y), zero padded.
-// Inline and free of function calls: it runs from the link driver with IRQs
-// masked, so it must stay trivially cheap.
+// Write `v` as exactly `width` zero-padded decimal digits at (x, y). Inline
+// with no calls: it runs from the link driver with IRQs masked, between link
+// bytes, so it must stay trivially cheap.
 static inline void count_put(int x, int y, int v, int width)
 {
     u16 *tm = text_map();
     for (int i = width - 1; i >= 0; i--) {
-        map_put(tm, x + i, y, '0' + (v % 10), PB_UI);
+        map_put(tm, x + i, y, (u8)('0' + (v % 10)), PB_UI);
         v /= 10;
     }
 }
 
-// Live transfer progress. Called from the link driver while the GBA holds the
-// clock (the camera is already waiting), so the four digit writes are off the
-// receive path and cannot make us miss an edge. The static "/4104 bytes" label
-// is drawn once by the scene (recv_draw/send_draw).
+// Live transfer progress. Called from the link driver after each exchanged
+// byte, at the exact call sites the old debug counter used, so link timing is
+// unchanged. Only the four count digits are redrawn (fixed width, so no digit
+// residue); the "/4104 bytes" label is drawn once by the scene. The counter
+// therefore only moves when bytes are actually exchanged — never before the
+// camera starts clocking.
 static void xfer_count(int n)
 {
     count_put(7, 13, n, 4);
@@ -110,7 +112,9 @@ void receive_frame(int frame)
         recv_draw();
         VBlankIntrWait();               // commit the "receiving" screen
 
-        // B's reply stream: handshake, mode, then filler.
+        // B's reply stream: handshake, mode, then filler. The handshake and
+        // album count stay in the first rounds: the camera needs them up front
+        // to start the connection at all.
         memset(tx_buf, 0, sizeof tx_buf);
         tx_buf[0] = TRADE_HANDSHAKE_B;
         tx_buf[1] = reply_mode();
@@ -128,11 +132,10 @@ void receive_frame(int frame)
                                    rx_buf, TRADE_STREAM_BYTES, &rx_len, xfer_count);
             if (rc == CAM_XCHG_CANCELLED)
                 break;
-            // Only call it a complete photo once we hold every byte the camera
-            // clocks for one. A short read means we lost the tail, so stay
-            // armed rather than accept and store a truncated image.
-            if (rx_len >= TRADE_PHOTO_BYTES &&
-                trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
+            // A capture counts as a photo as soon as the image, thumbnail and
+            // metadata blocks have all arrived — exactly the baseline rule, no
+            // exact-length gate on top of it.
+            if (trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
                 rv_result = cam_store_add(img, thumb, meta);
                 break;
             }
