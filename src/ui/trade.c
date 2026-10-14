@@ -32,13 +32,23 @@ static void count_put(int x, int y, int v, int width)
 }
 
 // Live transfer progress, called from the link driver with IRQs masked: a
-// fixed-width "NNNN/4104 bytes" counter so the digits never leave residue.
+// fixed-width "NNNN/4102 bytes" counter so the digits never leave residue.
+// Only transfer bytes are counted: the first 2 rounds are the handshake and
+// mode/album-count header, so the display shows n - 2 (clamped at zero) and
+// sits at 0000 until the camera actually starts. Call sites and write pattern
+// match the original counter exactly; the only per-byte addition is the
+// subtract. Once (when round 2 completes — both sides have clocked, so the
+// camera is definitively talking) the bottom-left status flips to LINK.
 static void xfer_count(int n)
 {
-    count_put(7, 13, n, 4);
+    int d = n - TRADE_HDR_BYTES;
+    if (d < 0) d = 0;
+    count_put(7, 13, d, 4);
     map_put(text_map(), 11, 13, '/', PB_UI);
-    count_put(12, 13, TRADE_PHOTO_BYTES, 4);
+    count_put(12, 13, TRADE_DATA_BYTES, 4);
     ui_text(17, 13, " bytes", PB_UI);
+    if (n == 2)
+        ui_text(1, 19, "LINK   ", PB_UI);
 }
 
 // B reports its album count in Mode 1, never "full" (0x5E would make A abort).
@@ -79,6 +89,7 @@ static void recv_draw(void)
         ui_text(6, 9,  "Waiting for the", PB_UI);
         ui_text(6, 10, "camera to send.", PB_UI);
         ui_text(6, 12, "Hold B to cancel", PB_UI);
+        ui_text(1, 19, "NO LINK", PB_UI);
         xfer_count(0);
         break;
     case RECV_FAIL:
@@ -207,6 +218,7 @@ static void send_draw(void)
         ui_text(6, 9,  "Camera must be in", PB_UI);
         ui_text(6, 10, "RECEIVE mode.", PB_UI);
         ui_text(6, 12, "Hold B to cancel", PB_UI);
+        ui_text(1, 19, "NO LINK", PB_UI);
         xfer_count(0);
         break;
     case SEND_DONE:

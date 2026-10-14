@@ -84,7 +84,8 @@ script writes 24-bit BMP files, which any image viewer opens. Each photo is 128Ã
 
 On the camera, press the SELECT button to open the menu, move UP to LINK and press A, move DOWN
 to TRANSFER and press A, then choose SEND and pick the photo. On the GBA, press A to start
-listening: a `n/4104 bytes` counter tracks the transfer, and the complete photo appears on
+listening: a `n/4102 bytes` counter tracks the transfer data (the 2 header bytes
+are excluded), and the complete photo appears on
 screen as soon as it arrives.
 
 ### Send
