@@ -90,7 +90,9 @@ screen as soon as it arrives.
 
 ### Send
 
-On the GBA, pick a stored photo with the D-Pad and press A. On the camera, press the SELECT
+The GBA shows the stored photos one at a time. Move with the D-Pad; the `X/Y` counter in the
+bottom-left is the photo's number, and the bottom bar shows the **A** send and **B** cancel
+buttons. Press A to send the photo on screen, or B to go back. On the camera, press the SELECT
 button to open the menu, move UP to LINK and press A, move DOWN to TRANSFER and press A, then
 choose RECEIVE. The GBA shows `Photo sent` and the camera keeps the original.
 
