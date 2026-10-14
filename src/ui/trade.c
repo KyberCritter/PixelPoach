@@ -54,6 +54,7 @@ enum { RECV_READY, RECV_WAIT, RECV_PHOTO, RECV_FAIL };
 
 static int rv_state;
 static int rv_result;   // -1 = fail, >= 0 = slot saved
+static int rv_nospace;  // parse OK but cam_store_add failed (album full / no storage)
 
 static void recv_draw(void)
 {
@@ -82,7 +83,16 @@ static void recv_draw(void)
         break;
     case RECV_FAIL:
         ui_text(10, 5, "RECEIVE", PB_UI);
-        ui_text(6, 9, "No photo received.", PB_UI);
+        if (rv_nospace) {
+            if (cam_store_capacity() == 0) {
+                ui_text(6, 9, "No storage found.", PB_UI);
+            } else {
+                ui_text(6, 9, "Album full.", PB_UI);
+                ui_text(6, 10, "Erase one in View.", PB_UI);
+            }
+        } else {
+            ui_text(6, 9, "No photo received.", PB_UI);
+        }
         ui_text(6, 16, "B: Back", PB_UI);
         break;
     default:
@@ -119,6 +129,7 @@ void receive_frame(int frame)
         int rc = CAM_XCHG_TIMEOUT;
         int rx_len = 0;
         rv_result = -1;
+        rv_nospace = 0;
         for (;;) {
             rx_len = 0;
             rc = cam_link_exchange(false, tx_buf, sizeof tx_buf,
@@ -127,6 +138,7 @@ void receive_frame(int frame)
                 break;
             if (trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
                 rv_result = cam_store_add(img, thumb, meta);
+                rv_nospace = (rv_result < 0);
                 break;
             }
         }
