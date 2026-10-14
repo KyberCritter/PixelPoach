@@ -128,7 +128,11 @@ void receive_frame(int frame)
                                    rx_buf, TRADE_STREAM_BYTES, &rx_len, xfer_count);
             if (rc == CAM_XCHG_CANCELLED)
                 break;
-            if (trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
+            // Only call it a complete photo once we hold every byte the camera
+            // clocks for one. A short read means we lost the tail, so stay
+            // armed rather than accept and store a truncated image.
+            if (rx_len >= TRADE_PHOTO_BYTES &&
+                trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
                 rv_result = cam_store_add(img, thumb, meta);
                 break;
             }
