@@ -19,27 +19,26 @@ static EWRAM_BSS u8 img[CAM_IMG_BYTES];
 static EWRAM_BSS u8 thumb[CAM_THUMB_BYTES];
 static EWRAM_BSS u8 meta[CAM_META_BYTES];
 
-// Write `v` as exactly `width` zero-padded decimal digits at (x, y). Inline
-// with no calls: it runs from the link driver with IRQs masked, between link
-// bytes, so it must stay trivially cheap.
-static inline void count_put(int x, int y, int v, int width)
+// Write `v` right-aligned in `width` decimal digits at (x, y), zero padded.
+static void count_put(int x, int y, int v, int width)
 {
+    static const char dig[] = "0123456789";
     u16 *tm = text_map();
+    if (v < 0) v = 0;
     for (int i = width - 1; i >= 0; i--) {
-        map_put(tm, x + i, y, (u8)('0' + (v % 10)), PB_UI);
+        map_put(tm, x + i, y, dig[v % 10], PB_UI);
         v /= 10;
     }
 }
 
-// Live transfer progress. Called from the link driver after each exchanged
-// byte, at the exact call sites the old debug counter used, so link timing is
-// unchanged. Only the four count digits are redrawn (fixed width, so no digit
-// residue); the "/4104 bytes" label is drawn once by the scene. The counter
-// therefore only moves when bytes are actually exchanged — never before the
-// camera starts clocking.
+// Live transfer progress, called from the link driver with IRQs masked: a
+// fixed-width "NNNN/4104 bytes" counter so the digits never leave residue.
 static void xfer_count(int n)
 {
     count_put(7, 13, n, 4);
+    map_put(text_map(), 11, 13, '/', PB_UI);
+    count_put(12, 13, TRADE_PHOTO_BYTES, 4);
+    ui_text(17, 13, " bytes", PB_UI);
 }
 
 // B reports its album count in Mode 1, never "full" (0x5E would make A abort).
@@ -74,17 +73,13 @@ static void recv_draw(void)
         ui_text(6, 14, "   then the photo.", PB_UI);
         ui_text(6, 16, "A: Listen  B: Back", PB_UI);
         break;
-    case RECV_WAIT: {
+    case RECV_WAIT:
         ui_text(9, 5, "RECEIVING...", PB_UI);
         ui_text(6, 9,  "Waiting for the", PB_UI);
         ui_text(6, 10, "camera to send.", PB_UI);
         ui_text(6, 12, "Hold B to cancel", PB_UI);
-        char line[16];
-        siprintf(line, "/%d bytes", TRADE_PHOTO_BYTES);
-        ui_text(11, 13, line, PB_UI);
-        count_put(7, 13, 0, 4);
+        xfer_count(0);
         break;
-    }
     case RECV_FAIL:
         ui_text(10, 5, "RECEIVE", PB_UI);
         ui_text(6, 9, "No photo received.", PB_UI);
@@ -112,9 +107,7 @@ void receive_frame(int frame)
         recv_draw();
         VBlankIntrWait();               // commit the "receiving" screen
 
-        // B's reply stream: handshake, mode, then filler. The handshake and
-        // album count stay in the first rounds: the camera needs them up front
-        // to start the connection at all.
+        // B's reply stream: handshake, mode, then filler.
         memset(tx_buf, 0, sizeof tx_buf);
         tx_buf[0] = TRADE_HANDSHAKE_B;
         tx_buf[1] = reply_mode();
@@ -132,9 +125,6 @@ void receive_frame(int frame)
                                    rx_buf, TRADE_STREAM_BYTES, &rx_len, xfer_count);
             if (rc == CAM_XCHG_CANCELLED)
                 break;
-            // A capture counts as a photo as soon as the image, thumbnail and
-            // metadata blocks have all arrived — exactly the baseline rule, no
-            // exact-length gate on top of it.
             if (trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
                 rv_result = cam_store_add(img, thumb, meta);
                 break;
@@ -200,17 +190,13 @@ static void send_draw(void)
         }
         break;
     }
-    case SEND_BUSY: {
+    case SEND_BUSY:
         ui_text(10, 5, "SENDING...", PB_UI);
         ui_text(6, 9,  "Camera must be in", PB_UI);
         ui_text(6, 10, "RECEIVE mode.", PB_UI);
         ui_text(6, 12, "Hold B to cancel", PB_UI);
-        char line[16];
-        siprintf(line, "/%d bytes", TRADE_PHOTO_BYTES);
-        ui_text(11, 13, line, PB_UI);
-        count_put(7, 13, 0, 4);
+        xfer_count(0);
         break;
-    }
     case SEND_DONE:
         ui_text(10, 5, "SEND BACK", PB_UI);
         ui_text(6, 8, sd_ok ? "Photo sent." : "Send failed.", PB_UI);
