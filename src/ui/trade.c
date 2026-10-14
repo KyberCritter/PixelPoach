@@ -47,23 +47,6 @@ static u8 reply_mode(void)
     return (u8)(n < 29 ? n : 29);
 }
 
-// B's reply stream. B's only meaningful response to Camera A is its handshake
-// and album/mode byte, and the camera treats that as the go-ahead. We place it
-// at the very END of the picture stream instead of the first round, so the
-// camera only learns the trade was accepted after it has clocked the whole
-// photo through to us. While the picture is arriving B shifts out 0x00. If we
-// never receive every byte the confirmation is never sent, so the camera has
-// nothing telling it the trade succeeded and does not delete its picture.
-static void build_reply(u8 *out, int len)
-{
-    memset(out, 0, len);
-    int at = TRADE_PHOTO_BYTES - 2;      // last two rounds of the picture stream
-    if (at < 0 || at + 1 >= len)
-        return;
-    out[at]     = TRADE_HANDSHAKE_B;
-    out[at + 1] = reply_mode();
-}
-
 // ---------- receive (GBA is Camera B, camera A sends) ----------
 
 enum { RECV_READY, RECV_WAIT, RECV_PHOTO, RECV_FAIL };
@@ -127,8 +110,10 @@ void receive_frame(int frame)
         recv_draw();
         VBlankIntrWait();               // commit the "receiving" screen
 
-        // B's reply stream: silence during the picture, confirmation at the end.
-        build_reply(tx_buf, sizeof tx_buf);
+        // B's reply stream: handshake, mode, then filler.
+        memset(tx_buf, 0, sizeof tx_buf);
+        tx_buf[0] = TRADE_HANDSHAKE_B;
+        tx_buf[1] = reply_mode();
 
         // Stay armed until a whole photo arrives or the user holds B. A gap in
         // the link stream (the camera has not started yet, or pauses between
