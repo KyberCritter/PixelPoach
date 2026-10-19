@@ -52,11 +52,11 @@ static void xfer_count(int n)
         ui_text(1, 19, "LINK   ", PB_UI);
 }
 
-// B reports its album count in Mode 1, never "full" (0x5E would make A abort).
+// Info byte: photo count plus the album-full bit (0x5E = full).
 static u8 reply_mode(void)
 {
     int n = cam_store_count();
-    return (u8)(n < 29 ? n : 29);
+    return (n >= 30) ? TRADE_MODE_FULL : (u8)n;
 }
 
 // ---------- MODE4 overlay (draw text and buttons onto a bitmap photo) ----------
@@ -314,7 +314,7 @@ void send_frame(int frame)
         if (!key_hit(KEY_A)) return;
 
         // img/thumb/meta were loaded when the select screen was drawn.
-        int tx_len = trade_build_send(img, thumb, meta, tx_buf);
+        int tx_len = trade_build_send(sd_cur, img, thumb, meta, tx_buf);
         tx_buf[1] = reply_mode();           // A's album count in Mode 1
 
         pxl_init_video();                   // leave the MODE4 photo layer
@@ -323,11 +323,17 @@ void send_frame(int frame)
         VBlankIntrWait();
 
         int rx_len = 0;
+        // Stop clocking at the exact end of the stream: the camera ends the
+        // transfer on its own and an extra clock leaves it waiting for more.
         int rc = cam_link_exchange(true, tx_buf, tx_len,
-                                   rx_buf, TRADE_STREAM_BYTES, &rx_len, xfer_count);
+                                   rx_buf, tx_len, &rx_len, xfer_count);
         dbg_record(rc, rx_buf, rx_len, tx_buf, tx_len);
 
-        sd_ok = (rx_len >= 1) && (rx_buf[0] == TRADE_HANDSHAKE_B);
+        // A handshake alone only means the camera answered; the photo is in
+        // its album only if every exchange of the stream completed.
+        sd_ok = (rc == CAM_XCHG_OK) &&
+                (rx_len == TRADE_SEND_BYTES) &&
+                (rx_buf[0] == TRADE_HANDSHAKE_B);
         sd_state = SEND_DONE;
         send_draw();
     } else if (sd_state == SEND_DONE) {

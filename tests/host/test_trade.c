@@ -15,12 +15,25 @@ int main(void)
     for (int i = 0; i < TRADE_THUMB_BYTES; i++) thumb[i] = (uint8_t)(i * 5 + 7);
     for (int i = 0; i < TRADE_META_BYTES; i++)  meta[i]  = (uint8_t)(i + 1);
 
+    // The wire offsets are protocol constants: prelude = 7 bytes, payload =
+    // 4096 bytes (image 3584 + thumb 256 + tag 92 + echo 92 + tail 72).
+    CHECK(TRADE_OFF_IMAGE == 7);
+    CHECK(TRADE_OFF_THUMB == 3591);
+    CHECK(TRADE_OFF_META == 3847);
+    CHECK(TRADE_SEND_BYTES == 4103);
+
     uint8_t stream[TRADE_STREAM_BYTES];
-    int len = trade_build_send(img, thumb, meta, stream);
-    CHECK(len <= TRADE_STREAM_BYTES);
+    int len = trade_build_send(7, img, thumb, meta, stream);
+    CHECK(len == TRADE_SEND_BYTES);
     CHECK(stream[0] == TRADE_HANDSHAKE_A);
-    // image must sit exactly at TRADE_OFF_IMAGE (handshake+mode+pad)
+    CHECK(stream[3] == (TRADE_CMD_PHOTO | 7));
+    CHECK(stream[5] == 0x01);
+    // image must sit exactly at TRADE_OFF_IMAGE (7-byte prelude)
     CHECK(memcmp(stream + TRADE_OFF_IMAGE, img, TRADE_IMG_BYTES) == 0);
+    CHECK(memcmp(stream + TRADE_OFF_THUMB, thumb, TRADE_THUMB_BYTES) == 0);
+    CHECK(memcmp(stream + TRADE_OFF_META + TRADE_META_BYTES,
+                 meta, TRADE_META_BYTES) == 0);
+    CHECK(stream[TRADE_SEND_BYTES - 1] == meta[TRADE_META_OWNER_BYTE]);
 
     uint8_t oimg[TRADE_IMG_BYTES], othumb[TRADE_THUMB_BYTES], ometa[TRADE_META_BYTES];
     CHECK(trade_parse_capture(stream, len, oimg, othumb, ometa));

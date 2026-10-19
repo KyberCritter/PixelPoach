@@ -12,17 +12,20 @@ bool trade_parse_capture(const uint8_t *rx, int rx_len,
     return true;
 }
 
-int trade_build_send(const uint8_t *img, const uint8_t *thumb,
-                     const uint8_t *meta, uint8_t *out)
+int trade_build_send(int photo_number, const uint8_t *img,
+                     const uint8_t *thumb, const uint8_t *meta, uint8_t *out)
 {
-    int n = 0;
-    out[n++] = TRADE_HANDSHAKE_A;
-    out[n++] = TRADE_MODE_EMPTY;             // A's album count (Mode 1); caller may adjust
-    while (n < TRADE_OFF_IMAGE) out[n++] = 0x00;   // pad to the image offset
-    memcpy(out + n, img, TRADE_IMG_BYTES);   n += TRADE_IMG_BYTES;
-    memcpy(out + n, thumb, TRADE_THUMB_BYTES); n += TRADE_THUMB_BYTES;
-    memcpy(out + n, meta, TRADE_META_BYTES);   n += TRADE_META_BYTES;
-    memcpy(out + n, meta, TRADE_META_BYTES);   n += TRADE_META_BYTES; // "Metadata again"
-    while (n < TRADE_STREAM_BYTES) out[n++] = 0x00;
-    return n;
+    memset(out, 0, TRADE_SEND_BYTES);
+
+    out[0] = TRADE_HANDSHAKE_A;
+    out[1] = TRADE_MODE_EMPTY;       // A's album count (Mode 1); caller may adjust
+    out[3] = (uint8_t)(TRADE_CMD_PHOTO | (photo_number & 0x3F));
+    out[5] = 0x01;                   // ready
+
+    memcpy(out + TRADE_OFF_IMAGE, img, TRADE_IMG_BYTES);
+    memcpy(out + TRADE_OFF_THUMB, thumb, TRADE_THUMB_BYTES);
+    memcpy(out + TRADE_OFF_META, meta, TRADE_META_BYTES);
+    memcpy(out + TRADE_OFF_META + TRADE_META_BYTES, meta, TRADE_META_BYTES);
+    out[TRADE_SEND_BYTES - 1] = meta[TRADE_META_OWNER_BYTE];
+    return TRADE_SEND_BYTES;
 }
