@@ -10,7 +10,7 @@
 #include "core/charset.h"
 
 // Bump this on release, matching GBScribe's title screen.
-#define PIXELPOACH_VERSION "v0.1"
+#define PIXELPOACH_VERSION "v0.2"
 
 // ---------- title ----------
 
