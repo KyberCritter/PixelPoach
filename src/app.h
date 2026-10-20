@@ -26,9 +26,6 @@ void send_enter(void);      void send_frame(int frame);
 // Preselect a stored photo the next time the send scene is entered.
 void send_set_start(int slot);
 void view_enter(void);      void view_frame(int frame);
-// Paint a raw camera image (CAM_IMG_BYTES) full-screen in MODE4. Used by the
-// receive scene to show the photo as soon as it has been captured.
-void view_render_photo(const uint8_t *img);
 void credits_enter(void);   void credits_frame(int frame);
 void dbg_enter(void);       void dbg_frame(int frame);
 

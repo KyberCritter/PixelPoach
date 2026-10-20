@@ -1,13 +1,10 @@
 // Receive and send scenes: drive the camera trade over the link.
-#include <stdio.h>
 #include <string.h>
 #include <tonc.h>
 #include "app.h"
 #include "ui/ui.h"
 #include "ui/screen.h"
-#include "ui/bmp.h"
-#include "core/charset.h"
-#include "gfx/font.h"
+#include "ui/photo_menu.h"
 #include "cam/cam_store.h"
 #include "cam/cam_trade.h"
 #include "debug/dbg.h"
@@ -78,8 +75,8 @@ static int rv_nospace;  // parse OK but cam_store_add failed (album full / no st
 static void recv_draw(void)
 {
     ui_cls();
-    ui_fill(4, 4, 22, 12, 3);
-    ui_frame(4, 4, 22, 12);
+    ui_fill(3, 4, 24, 12, 3);
+    ui_frame(3, 4, 24, 12);
     switch (rv_state) {
     case RECV_READY:
         ui_text(10, 5, "RECEIVE", PB_UI);
@@ -176,7 +173,7 @@ void receive_frame(int frame)
 
         if (rv_result >= 0) {
             // Show the complete photo immediately; B returns to the menu.
-            view_render_photo(img);
+            photo_menu_show_image(img);
             rv_state = RECV_PHOTO;
         } else {
             rv_state = RECV_FAIL;
@@ -197,43 +194,21 @@ static int sd_state;
 static int sd_cur;        // slot index
 static int sd_start = -1; // slot to open on next enter (-1 = first occupied)
 static bool sd_ok;
+static bool sd_open;
+static int sd_sel;
 
 void send_set_start(int slot)
 {
     sd_start = slot;
 }
 
-static int next_occupied(int from, int dir)
-{
-    int cap = cam_store_capacity();
-    if (cap == 0) return -1;
-    for (int i = 0; i < cap; i++) {
-        int s = (from + dir * (i + 1) + cap * 2) % cap;
-        if (cam_store_occupied(s)) return s;
-    }
-    return -1;
-}
-
-// The select screen is a MODE4 photo (one at a time) with the photo number in
-// the bottom-left and A/B button hints along the bottom. img/thumb/meta hold
-// the photo currently on screen so A can send it without re-reading the slot.
+// Load the previewed photo into img/thumb/meta, then paint the shared photo
+// menu. Those buffers hold the photo on screen so A can send it without
+// re-reading the slot.
 static void send_select_draw(void)
 {
     cam_store_get(sd_cur, img, thumb, meta);
-    view_render_photo(img);
-
-    int ord = 0;
-    for (int s = 0; s <= sd_cur; s++)
-        if (cam_store_occupied(s)) ord++;
-
-    char line[16];
-    siprintf(line, "%d/%d", ord, cam_store_count());
-    bmp_text(6, 150, line, 0);
-
-    bmp_button(56, 142, 'A');
-    bmp_text(74, 146, "Send", 0);
-    bmp_button(116, 142, 'B');
-    bmp_text(134, 146, "Cancel", 0);
+    photo_menu_draw(sd_cur);
 }
 
 // MODE0 message screens (empty album, busy, result).
@@ -265,15 +240,58 @@ static void send_draw(void)
     }
 }
 
+static void send_begin(void)
+{
+    // img/thumb/meta were loaded when the select screen was drawn.
+    int tx_len = trade_build_send(sd_cur, img, thumb, meta, tx_buf);
+    tx_buf[1] = reply_mode();           // A's album count in Mode 1
+
+    pxl_init_video();                   // leave the MODE4 photo layer
+    sd_state = SEND_BUSY;
+    send_draw();
+    VBlankIntrWait();
+
+    int rx_len = 0;
+    // Stop clocking at the exact end of the stream: the camera ends the
+    // transfer on its own and an extra clock leaves it waiting for more.
+    int rc = cam_link_exchange(true, tx_buf, tx_len,
+                               rx_buf, tx_len, &rx_len, xfer_count);
+    dbg_record(rc, rx_buf, rx_len, tx_buf, tx_len);
+
+    // A handshake alone only means the camera answered; the photo is in
+    // its album only if every exchange of the stream completed.
+    sd_ok = (rc == CAM_XCHG_OK) &&
+            (rx_len == TRADE_SEND_BYTES) &&
+            (rx_buf[0] == TRADE_HANDSHAKE_B);
+    sd_state = SEND_DONE;
+    send_draw();
+}
+
+static void send_delete_current(void)
+{
+    int s = photo_menu_delete(sd_cur);
+    sd_open = false;
+    if (s < 0) {
+        sd_cur = 0;
+        sd_state = SEND_EMPTY;
+        pxl_init_video();               // leave the MODE4 photo layer
+        send_draw();
+        return;
+    }
+    sd_cur = s;
+    send_select_draw();
+}
+
 void send_enter(void)
 {
     sd_state = SEND_SELECT;
+    sd_open = false;
 
     // Coming from the viewer, open on the photo that was on screen.
     int start = sd_start;
     sd_start = -1;
     sd_cur = (start >= 0 && cam_store_occupied(start))
-           ? start : next_occupied(-1, 1);
+           ? start : photo_menu_next(-1, 1);
 
     if (sd_cur < 0) {
         sd_cur = 0;
@@ -292,34 +310,45 @@ void send_frame(int frame)
         return;
     }
     if (sd_state == SEND_SELECT) {
-        if (key_hit(KEY_UP))   { int s = next_occupied(sd_cur, -1); if (s >= 0) { sd_cur = s; send_select_draw(); } }
-        if (key_hit(KEY_DOWN)) { int s = next_occupied(sd_cur, 1);  if (s >= 0) { sd_cur = s; send_select_draw(); } }
+        if (sd_open) {
+            if (key_hit(KEY_UP))         { sd_sel = PM_SEND;    photo_menu_draw_options(sd_sel); }
+            else if (key_hit(KEY_LEFT))  { sd_sel = PM_DELETE;  photo_menu_draw_options(sd_sel); }
+            else if (key_hit(KEY_RIGHT)) { sd_sel = PM_RECEIVE; photo_menu_draw_options(sd_sel); }
+
+            if (key_hit(KEY_B)) {
+                sd_open = false;
+                photo_menu_draw(sd_cur);
+                return;
+            }
+            if (!key_hit(KEY_A))
+                return;
+
+            switch (sd_sel) {
+            case PM_SEND:
+                sd_open = false;
+                send_begin();
+                break;
+            case PM_RECEIVE:
+                sd_open = false;
+                pxl_init_video();
+                app_goto(ST_RECEIVE);
+                break;
+            case PM_DELETE:
+                send_delete_current();
+                break;
+            }
+            return;
+        }
+
+        if (key_hit(KEY_A)) {
+            sd_open = true;
+            sd_sel = PM_SEND;
+            photo_menu_draw_options(sd_sel);
+            return;
+        }
+        if (key_hit(KEY_LEFT))  { int s = photo_menu_next(sd_cur, -1); if (s >= 0) { sd_cur = s; send_select_draw(); } }
+        if (key_hit(KEY_RIGHT)) { int s = photo_menu_next(sd_cur, 1);  if (s >= 0) { sd_cur = s; send_select_draw(); } }
         if (key_hit(KEY_B)) { pxl_init_video(); app_goto(ST_MENU); return; }
-        if (!key_hit(KEY_A)) return;
-
-        // img/thumb/meta were loaded when the select screen was drawn.
-        int tx_len = trade_build_send(sd_cur, img, thumb, meta, tx_buf);
-        tx_buf[1] = reply_mode();           // A's album count in Mode 1
-
-        pxl_init_video();                   // leave the MODE4 photo layer
-        sd_state = SEND_BUSY;
-        send_draw();
-        VBlankIntrWait();
-
-        int rx_len = 0;
-        // Stop clocking at the exact end of the stream: the camera ends the
-        // transfer on its own and an extra clock leaves it waiting for more.
-        int rc = cam_link_exchange(true, tx_buf, tx_len,
-                                   rx_buf, tx_len, &rx_len, xfer_count);
-        dbg_record(rc, rx_buf, rx_len, tx_buf, tx_len);
-
-        // A handshake alone only means the camera answered; the photo is in
-        // its album only if every exchange of the stream completed.
-        sd_ok = (rc == CAM_XCHG_OK) &&
-                (rx_len == TRADE_SEND_BYTES) &&
-                (rx_buf[0] == TRADE_HANDSHAKE_B);
-        sd_state = SEND_DONE;
-        send_draw();
     } else if (sd_state == SEND_DONE) {
         if (key_hit(KEY_A | KEY_B)) app_goto(ST_MENU);
     }
