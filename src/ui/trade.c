@@ -21,7 +21,9 @@ static EWRAM_BSS u8 thumb[CAM_THUMB_BYTES];
 static EWRAM_BSS u8 meta[CAM_META_BYTES];
 
 // Write `v` right-aligned in `width` decimal digits at (x, y), zero padded.
-static void count_put(int x, int y, int v, int width)
+// Inline and call-free: the progress callback runs from the link driver with
+// IRQs masked, where an extra call can overrun the camera's next clock edge.
+static inline void count_put(int x, int y, int v, int width)
 {
     static const char dig[] = "0123456789";
     u16 *tm = text_map();
@@ -32,23 +34,28 @@ static void count_put(int x, int y, int v, int width)
     }
 }
 
-// Live transfer progress, called from the link driver with IRQs masked: a
-// fixed-width "NNNN/4102 bytes" counter so the digits never leave residue.
-// Only transfer bytes are counted: the first 2 rounds are the handshake and
-// mode/album-count header, so the display shows n - 2 (clamped at zero) and
-// sits at 0000 until the camera actually starts. Call sites and write pattern
-// match the original counter exactly; the only per-byte addition is the
-// subtract. Once (when round 2 completes — both sides have clocked, so the
-// camera is definitively talking) the bottom-left status flips to LINK.
+// Paint the static "/4102 bytes" suffix once, when the scene is drawn. Keeping
+// it out of the per-byte callback matters: this code runs from the link driver
+// with IRQs masked, right before the GBA clocks a byte.
+static void xfer_label(void)
+{
+    map_put(text_map(), 11, 13, '/', PB_UI);
+    count_put(12, 13, TRADE_DATA_BYTES, 4);
+    ui_text(17, 13, " bytes", PB_UI);
+}
+
+// Live transfer progress, called from the link driver with IRQs masked: only
+// the four count digits are redrawn, so the camera never waits on a full text
+// redraw between clock edges. Only transfer bytes are counted: the first 2
+// rounds are the handshake and mode/album-count header, so the display shows
+// n - 2 (clamped at zero). Once both sides have clocked a round, the
+// bottom-left status flips to LINK.
 static void xfer_count(int n)
 {
     int d = n - TRADE_HDR_BYTES;
     if (d < 0) d = 0;
     count_put(7, 13, d, 4);
-    map_put(text_map(), 11, 13, '/', PB_UI);
-    count_put(12, 13, TRADE_DATA_BYTES, 4);
-    ui_text(17, 13, " bytes", PB_UI);
-    if (n == 2)
+    if (n == 2 || n == 3)               // send / receive master-turn parity
         ui_text(1, 19, "LINK   ", PB_UI);
 }
 
@@ -138,7 +145,8 @@ static void recv_draw(void)
         ui_text(6, 10, "camera to send.", PB_UI);
         ui_text(6, 12, "Hold B to cancel", PB_UI);
         ui_text(1, 19, "NO LINK", PB_UI);
-        xfer_count(0);
+        count_put(7, 13, 0, 4);
+        xfer_label();
         break;
     case RECV_FAIL:
         ui_text(10, 5, "RECEIVE", PB_UI);
@@ -195,11 +203,20 @@ void receive_frame(int frame)
                                    rx_buf, TRADE_STREAM_BYTES, &rx_len, xfer_count);
             if (rc == CAM_XCHG_CANCELLED)
                 break;
-            if (trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
+            // A short capture means we lost a byte (the stream shifted), not
+            // just the optional trailing clock. Saving it would display a
+            // photo with horizontal lines, so reject it.
+            if (rx_len >= TRADE_SEND_BYTES &&
+                trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
                 rv_result = cam_store_add(img, thumb, meta);
                 rv_nospace = (rv_result < 0);
                 break;
             }
+            // Something was clocked, so the camera did start a transfer. If it
+            // did not complete, report the failure instead of re-arming and
+            // waiting forever on a camera that has already finished.
+            if (rx_len > 0)
+                break;
         }
         dbg_record(rc, rx_buf, rx_len, tx_buf, rx_len);
 
@@ -277,7 +294,8 @@ static void send_draw(void)
         ui_text(6, 10, "RECEIVE mode.", PB_UI);
         ui_text(6, 12, "Hold B to cancel", PB_UI);
         ui_text(1, 19, "NO LINK", PB_UI);
-        xfer_count(0);
+        count_put(7, 13, 0, 4);
+        xfer_label();
         break;
     case SEND_DONE:
         ui_text(10, 5, "SEND BACK", PB_UI);
