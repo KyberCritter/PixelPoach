@@ -1,11 +1,8 @@
 # PixelPoach
 
-A homebrew tool for Game Boy Advance hardware that pulls photos from a real Game Boy Camera
-onto the flash cart's save file, and sends them back so the camera keeps them.
+A homebrew tool for Game Boy Advance hardware that can send and receive photos from a real Game Boy Camera.
 
 By Scott Ratchford — [scottratchford.com](https://scottratchford.com)
-
-Licensed under the **MIT License** — see [LICENSE.md](LICENSE.md).
 
 ## Where it came from
 
