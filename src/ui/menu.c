@@ -1,4 +1,4 @@
-// Title screen, main menu, and about screen.
+// Title screen, main menu, and credits screen.
 #include <stdio.h>
 #include <string.h>
 #include <tonc.h>
@@ -75,7 +75,7 @@ static const char *items[] = {
     "Send photo",
     "View photos",
     "Debug",
-    "About",
+    "Credits",
 };
 #define N_ITEMS 5
 
@@ -113,28 +113,38 @@ void menu_frame(int frame)
         case 1: app_goto(ST_SEND); break;
         case 2: app_goto(ST_VIEW); break;
         case 3: app_goto(ST_DEBUG); break;
-        case 4: app_goto(ST_ABOUT); break;
+        case 4: app_goto(ST_CREDITS); break;
         }
     }
 }
 
-// ---------- about ----------
+// ---------- credits ----------
 
-void about_enter(void)
+void credits_enter(void)
 {
+    // License notice, wrapped at word boundaries to fit the box.
+    static const char *notice[] = {
+        "Copyright (c) 2026",
+        "Scott Ratchford.",
+        "PixelPoach's original",
+        "code and documentation",
+        "are available under the",
+        "MIT License.",
+        "See the included LICENSE",
+        "file for the full text.",
+    };
+#define N_NOTICE ((int)(sizeof(notice) / sizeof(notice[0])))
+
     ui_cls();
-    ui_fill(4, 4, 22, 11, 3);
-    ui_frame(4, 4, 22, 11);
-    ui_text(11, 5, "ABOUT", PB_UI);
-    ui_text(6, 8,  "Dumps Game Boy Camera", PB_UI);
-    ui_text(6, 9,  "photos to this cart's", PB_UI);
-    ui_text(6, 10, ".sav over the link", PB_UI);
-    ui_text(6, 11, "cable, and can send", PB_UI);
-    ui_text(6, 12, "them back.", PB_UI);
-    ui_text(6, 16, "B: Back", PB_UI);
+    ui_fill(1, 2, 28, 12, 3);
+    ui_frame(1, 2, 28, 12);
+    text_centered(3, "CREDITS");
+    for (int i = 0; i < N_NOTICE; i++)
+        ui_text(3, 5 + i, notice[i], PB_UI);
+    ui_text(3, 15, "B: Back", PB_UI);
 }
 
-void about_frame(int frame)
+void credits_frame(int frame)
 {
     (void)frame;
     if (key_hit(KEY_B))

@@ -129,6 +129,8 @@ tools/      deploy, mGBA capture, and .sav extraction scripts
 
 ## Legal
 
-PixelPoach is free software, licensed under the MIT License — see [LICENSE.md](LICENSE.md).
+Copyright © 2026 Scott Ratchford.
+PixelPoach's original code and documentation are available under the MIT License.
+See [LICENSE](LICENSE) for the full text.
 
 Not affiliated with, endorsed by, or sponsored by Nintendo. Game Boy, Game Boy Color, Game Boy Advance, Game Boy Camera and Game Boy Printer are trademarks of Nintendo.
