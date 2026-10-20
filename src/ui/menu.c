@@ -1,5 +1,6 @@
 // Title screen, main menu, and about screen.
 #include <stdio.h>
+#include <string.h>
 #include <tonc.h>
 #include "app.h"
 #include "ui/ui.h"
@@ -8,22 +9,56 @@
 #include "storage/storage.h"
 #include "core/charset.h"
 
+// Bump this on release, matching GBScribe's title screen.
+#define PIXELPOACH_VERSION "v0.1"
+
 // ---------- title ----------
+
+// Even-length strings land half a tile right of the odd-length ones with plain
+// integer division, so nudge them one column left to keep every line on the
+// same grid.
+static int centered_x(const char *s)
+{
+    int len = (int)strlen(s);
+    int x = (SCREEN_TW - len) / 2;
+    if (!(len & 1))
+        x--;
+    return x;
+}
+
+static void text_centered(int y, const char *s)
+{
+    ui_text(centered_x(s), y, s, PB_UI);
+}
 
 void title_enter(void)
 {
     ui_cls();
-    ui_fill(6, 4, 20, 4, 3);
-    ui_frame(6, 4, 20, 4);
-    ui_text(9, 5, "PixelPoach", PB_UI);
-    ui_text(7, 6, "by Scott Ratchford", PB_UI);
-    ui_text(8, 12, "Game Boy Camera", PB_UI);
-    ui_text(8, 13, "photo transfer", PB_UI);
-    ui_text(8, 16, "PRESS START", PB_UI);
+
+    // The credit is the widest title line, so size the box tightly around it
+    // (one border column on each side). The credit sits one column right of
+    // centre, and the box follows it so the border stays clear of the text.
+    static const char *credit = "by Scott Ratchford";
+    int credit_x = centered_x(credit) + 1;
+    int box_w = (int)strlen(credit) + 2;
+    int box_x = credit_x - 1;
+
+    ui_fill(box_x, 4, box_w, 4, 3);
+    ui_frame(box_x, 4, box_w, 4);
+
+    text_centered(5, "PixelPoach");
+    ui_text(credit_x, 6, credit, PB_UI);
+    text_centered(12, "Game Boy Camera");
+    text_centered(13, "photo transfer");
+    text_centered(16, "PRESS START");
 
     char line[32];
     siprintf(line, "Save: %s", storage_name());
-    ui_text(4, 19, line, PB_UI);
+    text_centered(19, line);
+
+    // Version sits in the bottom-right corner, like GBScribe.
+    ui_text(SCREEN_TW - (int)strlen(PIXELPOACH_VERSION) - 1, 19,
+            PIXELPOACH_VERSION, PB_UI);
 }
 
 void title_frame(int frame)
