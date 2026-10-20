@@ -6,18 +6,15 @@ By Scott Ratchford — [scottratchford.com](https://scottratchford.com)
 
 ## Where it came from
 
-PixelPoach is the inverse of [GBScribe](https://github.com/KyberCritter/GBScribe), my homebrew
-word processor and pixel-art tool for Game Boy Advance hardware that prints to a real Game Boy
-Printer. GBScribe drives the printer by bit-banging the link port in general-purpose GPIO mode;
-its printer layer was extracted into [AdvancePrint](https://github.com/KyberCritter/AdvancePrint).
-PixelPoach extends that same link driver in the other direction, to speak the camera's
-LINK/TRANSFER protocol and capture the photos it trades.
+PixelPoach is the inverse of [GBScribe](https://github.com/KyberCritter/GBScribe), my homebrew word processor and pixel-art tool for Game Boy Advance hardware that prints to a real Game Boy Printer.
+GBScribe drives the printer by bit-banging the link port in general-purpose GPIO mode.
+Its printer layer was extracted into [AdvancePrint](https://github.com/KyberCritter/AdvancePrint).
+PixelPoach extends that same link driver in the other direction, using the camera's LINK/TRANSFER protocol and accepting the photos it sends.
 
 ## Why it's a GBA app, not a Game Boy Color app
 
 The target hardware is a Game Boy Advance running an **EZ-Flash Omega Definitive Edition**.
-That cart runs `.gb`/`.gbc` files through **Goomba Color**, a software emulator on the GBA's ARM
-CPU, which has no serial link implementation.
+That cart runs `.gb`/`.gbc` files through **Goomba Color**, a software emulator on the GBA's ARM CPU, which has no serial link implementation.
 This prevents the use of accessories like the printer.
 
 This requires PixelPoach to be a **native GBA application**.
@@ -30,15 +27,11 @@ GBA ── link port (GPIO mode) ── GBC/GB-Pocket link cable ── Game Boy
 ## Quick start
 
 1. Build the ROM and copy it to the flash cart's SD card.
-2. Boot PixelPoach on the GBA and connect the GBA to the GBC running the Game Boy Camera with
-   the link cable.
-3. To pull a photo, pick **Receive photo** on the GBA, then on the camera press the SELECT button
-   to open the menu, move UP to LINK and press A, move DOWN to TRANSFER and press A, then choose
-   SEND and pick the picture.
-4. To put it back, pick **Send photo** on the GBA, then on the camera press SELECT, move UP to
-   LINK and press A, move DOWN to TRANSFER and press A, then choose RECEIVE.
-5. Power off, pull `PixelPoach.sav` off the SD card, and run the extractor to turn the photos
-   into images (see below).
+2. Boot PixelPoach on the GBA and connect the GBA to the GBC running the Game Boy Camera with the link cable.
+3. To pull a photo, pick **Receive photo** on the GBA, then on the camera press the SELECT button to open the menu, move UP to LINK and press A, move DOWN to TRANSFER and press A, then choose SEND and pick the picture.
+4. To put it back, pick **Send photo** on the GBA, then on the camera press SELECT, move UP to LINK and press A, move DOWN to TRANSFER and press A, then choose RECEIVE.
+   This does not delete the photo from the save file.
+5. Power off, pull `PixelPoach.sav` off the SD card, and run the extractor to turn the photos into images (see below).
 
 ## Extracting photos
 
@@ -60,10 +53,8 @@ script writes 24-bit BMP files, which any image viewer opens. Each photo is 128�
 
 ## Features
 
-- Receives a photo the camera sends over LINK/TRANSFER and stores it in a camera-format `.sav`
-  on the flash cart (the same 128 KB layout the camera's own SRAM uses)
-- Sends a stored photo back, so a trade that would normally delete the source leaves the camera
-  holding the original
+- Receives a photo the camera sends over LINK/TRANSFER and stores it in a camera-format `.sav` on the flash cart (the same 128 KB layout the camera's own SRAM uses)
+- Sends a stored photo back, so a trade that would normally delete the source leaves the camera holding the original
 - Browse and view stored photos on the GBA screen, in the camera's 128×112 2 bpp format
 - The save backend (FLASH1M or plain SRAM/FRAM, as on the EZ-Flash Omega) is detected at runtime
 
@@ -79,25 +70,29 @@ script writes 24-bit BMP files, which any image viewer opens. Each photo is 128�
 
 ### Receive
 
-On the camera, press the SELECT button to open the menu, move UP to LINK and press A, move DOWN
-to TRANSFER and press A, then choose SEND and pick the photo. On the GBA, press A to start
-listening: a `n/4102 bytes` counter tracks the transfer data (the 2 header bytes
-are excluded), and the complete photo appears on
-screen as soon as it arrives.
+1. On the Game Boy Camera, press the SELECT button to open the menu, move UP to LINK and press A, move DOWN to TRANSFER and press A.
+2. On the Game Boy Advance, select "Receive photo", then A to start listening.
+3. On the Game Boy Camera, choose SEND and pick the photo you wish to send.
+   This will delete the photo from your Game Boy Camera.
+4. The complete photo appears on the GBA's screen as soon as it arrives.
 
-### View and Send
+### View
 
-Both scenes show the stored photos one at a time on the same page: Left/Right moves between
-photos, the `X/Y` counter in the bottom-left is the photo's position, and the bottom bar shows
-the **A** Options and **B** Back prompts.
+The view menu opens the most recent photo first.
+Press LEFT to view the previous photo or RIGHT to view the next photo.
+The `X/Y` counter in the bottom-left is the number of the current photo and the number of photos saved.
 
-Press A to open the options: **Send Photo** at the top, **Delete Photo** on the left, and
-**Receive Photo** on the right. Move with the D-Pad and press A to confirm, or B to close the
-options. In View, SELECT also deletes the current photo.
+Press A to open the options: **Send Photo** at the top, **Delete Photo** on the left, and **Receive Photo** on the right.
+Select a menu option with the D-Pad and press A to confirm or B to close the options.
+In View, SELECT also deletes the current photo.
 
-To send, choose **Send Photo**. On the camera, press SELECT, move UP to LINK and press A, move
-DOWN to TRANSFER and press A, then choose RECEIVE. The GBA shows `Photo sent` and the camera
-keeps the original.
+### Send
+
+The send menu works similarly to the view menu, but the A button sends the photo.
+
+1. On the Game Boy Camera, press the SELECT button to open the menu, move UP to LINK and press A, move DOWN to TRANSFER and press A.
+2. On the Game Boy Advance, select "Send photo", then A to wait for acceptance.
+3. On the Game Boy Camera, choose RECEIVE.
 
 ## Building
 
