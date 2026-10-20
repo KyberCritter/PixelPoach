@@ -48,6 +48,16 @@
 #define TRADE_TAIL_BYTES   72
 #define TRADE_SEND_BYTES   (TRADE_OFF_TAIL + TRADE_TAIL_BYTES)     // 4103
 
+// Receive captures can start two bytes late, so their image begins at 5
+// instead of 7. trade_parse_capture() detects which alignment is present
+// from the owner block's "Magic" marker, falling back to this one.
+#define TRADE_CAP_OFF_IMAGE 5
+
+// ASCII marker at the end of a valid owner-metadata block, immediately
+// before its two checksum bytes.
+#define TRADE_MAGIC_LEN    5
+#define TRADE_MAGIC        "Magic"
+
 // Command byte: 0x40 | album position.
 #define TRADE_CMD_PHOTO    0x40
 

@@ -88,10 +88,11 @@ In View, SELECT also deletes the current photo.
 
 ### Send
 
-The send menu works similarly to the view menu, but the A button sends the photo.
+The send menu works similarly to the view menu: LEFT/RIGHT choose a photo, and A opens the options.
+To send, choose **Send Photo** (the top option) and press A.
 
 1. On the Game Boy Camera, press the SELECT button to open the menu, move UP to LINK and press A, move DOWN to TRANSFER and press A.
-2. On the Game Boy Advance, select "Send photo", then A to wait for acceptance.
+2. On the Game Boy Advance, select "Send photo", choose a photo with LEFT/RIGHT, then press A to open the options, select **Send Photo**, and press A to wait for acceptance.
 3. On the Game Boy Camera, choose RECEIVE.
 
 ## Building

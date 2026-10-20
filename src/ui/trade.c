@@ -154,20 +154,20 @@ void receive_frame(int frame)
                                    rx_buf, TRADE_STREAM_BYTES, &rx_len, xfer_count);
             if (rc == CAM_XCHG_CANCELLED)
                 break;
-            // A short capture means we lost a byte (the stream shifted), not
-            // just the optional trailing clock. Saving it would display a
-            // photo with horizontal lines, so reject it.
-            if (rx_len >= TRADE_SEND_BYTES &&
-                trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
+            // Do not gate on an exact wire length. A complete camera transfer
+            // is not always the same number of rounds as our transmit buffer
+            // (the camera stops after its payload, and the GBA clocks a
+            // trailing byte), so requiring TRADE_SEND_BYTES here rejects valid
+            // photos even though the whole image arrived. The parser validates
+            // that the capture reaches a complete owner-metadata block.
+            if (trade_parse_capture(rx_buf, rx_len, img, thumb, meta)) {
                 rv_result = cam_store_add(img, thumb, meta);
                 rv_nospace = (rv_result < 0);
                 break;
             }
-            // Something was clocked, so the camera did start a transfer. If it
-            // did not complete, report the failure instead of re-arming and
-            // waiting forever on a camera that has already finished.
-            if (rx_len > 0)
-                break;
+            // Stay armed. A gap in the stream (before the camera starts, or
+            // between bytes) must not drop us to the failure screen while the
+            // camera is still working. Hold B to cancel.
         }
         dbg_record(rc, rx_buf, rx_len, tx_buf, rx_len);
 

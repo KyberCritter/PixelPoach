@@ -14,6 +14,10 @@ int main(void)
     for (int i = 0; i < TRADE_IMG_BYTES; i++)   img[i]   = (uint8_t)(i * 11 + 3);
     for (int i = 0; i < TRADE_THUMB_BYTES; i++) thumb[i] = (uint8_t)(i * 5 + 7);
     for (int i = 0; i < TRADE_META_BYTES; i++)  meta[i]  = (uint8_t)(i + 1);
+    // A real owner block ends with "Magic" + checksum; the parser uses the
+    // marker to recover the image alignment.
+    memcpy(meta + (TRADE_META_BYTES - 2 - TRADE_MAGIC_LEN),
+           TRADE_MAGIC, TRADE_MAGIC_LEN);
 
     // The wire offsets are protocol constants: prelude = 7 bytes, payload =
     // 4096 bytes (image 3584 + thumb 256 + tag 92 + echo 92 + tail 72).
@@ -37,6 +41,16 @@ int main(void)
 
     uint8_t oimg[TRADE_IMG_BYTES], othumb[TRADE_THUMB_BYTES], ometa[TRADE_META_BYTES];
     CHECK(trade_parse_capture(stream, len, oimg, othumb, ometa));
+    CHECK(memcmp(oimg, img, TRADE_IMG_BYTES) == 0);
+    CHECK(memcmp(othumb, thumb, TRADE_THUMB_BYTES) == 0);
+    CHECK(memcmp(ometa, meta, TRADE_META_BYTES) == 0);
+
+    // Real GBA captures can omit the first two wire bytes, moving every later
+    // block two bytes earlier. The parser must still recover the same photo.
+    uint8_t capture[TRADE_STREAM_BYTES];
+    int cap_len = len - 2;
+    memcpy(capture, stream + 2, (size_t)cap_len);
+    CHECK(trade_parse_capture(capture, cap_len, oimg, othumb, ometa));
     CHECK(memcmp(oimg, img, TRADE_IMG_BYTES) == 0);
     CHECK(memcmp(othumb, thumb, TRADE_THUMB_BYTES) == 0);
     CHECK(memcmp(ometa, meta, TRADE_META_BYTES) == 0);

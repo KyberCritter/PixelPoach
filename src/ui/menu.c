@@ -46,7 +46,8 @@ void title_enter(void)
     ui_fill(box_x, 4, box_w, 4, 3);
     ui_frame(box_x, 4, box_w, 4);
 
-    text_centered(5, "PixelPoach");
+    // Title and credit both sit one column right of centre.
+    ui_text(centered_x("PixelPoach") + 1, 5, "PixelPoach", PB_UI);
     ui_text(credit_x, 6, credit, PB_UI);
     text_centered(11, "Game Boy Camera");
     text_centered(12, "photo transfer");
