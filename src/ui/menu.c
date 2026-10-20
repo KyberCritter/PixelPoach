@@ -48,8 +48,8 @@ void title_enter(void)
 
     text_centered(5, "PixelPoach");
     ui_text(credit_x, 6, credit, PB_UI);
-    text_centered(12, "Game Boy Camera");
-    text_centered(13, "photo transfer");
+    text_centered(11, "Game Boy Camera");
+    text_centered(12, "photo transfer");
     text_centered(16, "PRESS START");
 
     char line[32];

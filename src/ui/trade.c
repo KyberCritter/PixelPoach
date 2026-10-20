@@ -5,6 +5,7 @@
 #include "app.h"
 #include "ui/ui.h"
 #include "ui/screen.h"
+#include "ui/bmp.h"
 #include "core/charset.h"
 #include "gfx/font.h"
 #include "cam/cam_store.h"
@@ -66,53 +67,6 @@ static u8 reply_mode(void)
     return (n >= 30) ? TRADE_MODE_FULL : (u8)n;
 }
 
-// ---------- MODE4 overlay (draw text and buttons onto a bitmap photo) ----------
-//
-// MODE4 shows the centred photo as a BG2 bitmap with no text layer, so the
-// send scene's counter and button hints are painted straight into VRAM. VRAM
-// ignores 8-bit writes (the byte mirrors into both halves of the halfword), so
-// each pixel is a read-modify-write of the whole halfword.
-
-static void bmp_px(int x, int y, u8 c)
-{
-    if (x < 0 || x >= 240 || y < 0 || y >= 160) return;
-    vu16 *p = (vu16 *)MEM_VRAM + (y * 240 + x) / 2;
-    u16 v = *p;
-    if (x & 1) v = (v & 0x00FF) | ((u16)c << 8);
-    else       v = (v & 0xFF00) | c;
-    *p = v;
-}
-
-// One ROM-font glyph (tile `code`) in MODE4 palette index `c`. Pixels are
-// stored low-nibble-first in memory order, matching the tiled BG upload.
-static void bmp_glyph(int x, int y, int code, u8 c)
-{
-    const u8 *ft = (const u8 *)font_tiles;
-    for (int r = 0; r < 8; r++)
-        for (int i = 0; i < 8; i++) {
-            u8 b = ft[code * 32 + r * 4 + (i >> 1)];
-            u8 px = (i & 1) ? (b >> 4) : (b & 0xF);
-            if (px) bmp_px(x + i, y + r, c);
-        }
-}
-
-static void bmp_text(int x, int y, const char *s, u8 c)
-{
-    for (; *s; s++, x += 8) bmp_glyph(x, y, (u8)*s, c);
-}
-
-// A round GBA-style face button (white disc, dark letter) 16x16.
-static void bmp_button(int x, int y, int letter)
-{
-    for (int j = 0; j < 16; j++)
-        for (int i = 0; i < 16; i++) {
-            int dx = 2 * i - 15, dy = 2 * j - 15;
-            if (dx * dx + dy * dy <= 225)
-                bmp_px(x + i, y + j, 0);
-        }
-    bmp_glyph(x + 4, y + 4, letter, 4);
-}
-
 // ---------- receive (GBA is Camera B, camera A sends) ----------
 
 enum { RECV_READY, RECV_WAIT, RECV_PHOTO, RECV_FAIL };
@@ -137,7 +91,7 @@ static void recv_draw(void)
         ui_text(6, 12, "   press A.", PB_UI);
         ui_text(6, 13, "4. Pick SEND, A,", PB_UI);
         ui_text(6, 14, "   then the photo.", PB_UI);
-        ui_text(6, 16, "A: Listen  B: Back", PB_UI);
+        ui_text(6, 17, "A: Listen  B: Back", PB_UI);
         break;
     case RECV_WAIT:
         ui_text(9, 5, "RECEIVING...", PB_UI);
@@ -241,7 +195,13 @@ enum { SEND_SELECT, SEND_EMPTY, SEND_BUSY, SEND_DONE };
 
 static int sd_state;
 static int sd_cur;        // slot index
+static int sd_start = -1; // slot to open on next enter (-1 = first occupied)
 static bool sd_ok;
+
+void send_set_start(int slot)
+{
+    sd_start = slot;
+}
 
 static int next_occupied(int from, int dir)
 {
@@ -308,7 +268,13 @@ static void send_draw(void)
 void send_enter(void)
 {
     sd_state = SEND_SELECT;
-    sd_cur = next_occupied(-1, 1);
+
+    // Coming from the viewer, open on the photo that was on screen.
+    int start = sd_start;
+    sd_start = -1;
+    sd_cur = (start >= 0 && cam_store_occupied(start))
+           ? start : next_occupied(-1, 1);
+
     if (sd_cur < 0) {
         sd_cur = 0;
         sd_state = SEND_EMPTY;
