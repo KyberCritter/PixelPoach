@@ -16,7 +16,7 @@ void app_goto(AppState s)
     case ST_SEND:     send_enter();     break;
     case ST_VIEW:     view_enter();     break;
     case ST_DEBUG:    dbg_enter();      break;
-    case ST_ABOUT:    about_enter();    break;
+    case ST_CREDITS:  credits_enter();  break;
     }
 }
 
@@ -37,6 +37,6 @@ void app_frame(int frame)
     case ST_SEND:     send_frame(frame);     break;
     case ST_VIEW:     view_frame(frame);     break;
     case ST_DEBUG:    dbg_frame(frame);      break;
-    case ST_ABOUT:    about_frame(frame);    break;
+    case ST_CREDITS:  credits_frame(frame);  break;
     }
 }

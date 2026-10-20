@@ -11,7 +11,7 @@ typedef enum {
     ST_SEND,      // send a stored photo back to the camera
     ST_VIEW,      // browse stored photos
     ST_DEBUG,     // hex viewer of the last link exchange
-    ST_ABOUT,
+    ST_CREDITS,
 } AppState;
 
 void app_init(void);
@@ -23,11 +23,10 @@ void title_enter(void);     void title_frame(int frame);
 void menu_enter(void);      void menu_frame(int frame);
 void receive_enter(void);   void receive_frame(int frame);
 void send_enter(void);      void send_frame(int frame);
+// Preselect a stored photo the next time the send scene is entered.
+void send_set_start(int slot);
 void view_enter(void);      void view_frame(int frame);
-// Paint a raw camera image (CAM_IMG_BYTES) full-screen in MODE4. Used by the
-// receive scene to show the photo as soon as it has been captured.
-void view_render_photo(const uint8_t *img);
-void about_enter(void);     void about_frame(int frame);
+void credits_enter(void);   void credits_frame(int frame);
 void dbg_enter(void);       void dbg_frame(int frame);
 
 // MODE0 text-mode video setup (main.c). The view scene calls this on exit to

@@ -88,13 +88,19 @@ listening: a `n/4102 bytes` counter tracks the transfer data (the 2 header bytes
 are excluded), and the complete photo appears on
 screen as soon as it arrives.
 
-### Send
+### View and Send
 
-The GBA shows the stored photos one at a time. Move with the D-Pad; the `X/Y` counter in the
-bottom-left is the photo's number, and the bottom bar shows the **A** send and **B** cancel
-buttons. Press A to send the photo on screen, or B to go back. On the camera, press the SELECT
-button to open the menu, move UP to LINK and press A, move DOWN to TRANSFER and press A, then
-choose RECEIVE. The GBA shows `Photo sent` and the camera keeps the original.
+Both scenes show the stored photos one at a time on the same page: Left/Right moves between
+photos, the `X/Y` counter in the bottom-left is the photo's position, and the bottom bar shows
+the **A** Options and **B** Back prompts.
+
+Press A to open the options: **Send Photo** at the top, **Delete Photo** on the left, and
+**Receive Photo** on the right. Move with the D-Pad and press A to confirm, or B to close the
+options. In View, SELECT also deletes the current photo.
+
+To send, choose **Send Photo**. On the camera, press SELECT, move UP to LINK and press A, move
+DOWN to TRANSFER and press A, then choose RECEIVE. The GBA shows `Photo sent` and the camera
+keeps the original.
 
 ## Building
 
@@ -129,6 +135,8 @@ tools/      deploy, mGBA capture, and .sav extraction scripts
 
 ## Legal
 
-PixelPoach is free software, licensed under the MIT License — see [LICENSE.md](LICENSE.md).
+Copyright © 2026 Scott Ratchford.
+PixelPoach's original code and documentation are available under the MIT License.
+See [LICENSE](LICENSE) for the full text.
 
 Not affiliated with, endorsed by, or sponsored by Nintendo. Game Boy, Game Boy Color, Game Boy Advance, Game Boy Camera and Game Boy Printer are trademarks of Nintendo.
