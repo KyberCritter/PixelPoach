@@ -16,6 +16,7 @@ void title_enter(void)
     ui_fill(6, 4, 20, 4, 3);
     ui_frame(6, 4, 20, 4);
     ui_text(9, 5, "PixelPoach", PB_UI);
+    ui_text(7, 6, "by Scott Ratchford", PB_UI);
     ui_text(8, 12, "Game Boy Camera", PB_UI);
     ui_text(8, 13, "photo transfer", PB_UI);
     ui_text(8, 16, "PRESS START", PB_UI);
